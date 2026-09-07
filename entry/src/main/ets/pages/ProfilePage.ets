@@ -20,26 +20,31 @@ export struct ProfilePage {
   onRemoveProfile?: (uid: string) => void;
   onUpdateProfile?: (uid: string) => void;
   onUpdateAllProfiles?: () => void;
+  onScanQrCode?: () => void;
 
   build() {
     Scroll() {
       Column({ space: 12 }) {
-        Row({ space: 8 }) {
+        Row({ space: 6 }) {
           Button('导入订阅')
             .layoutWeight(1)
             .height(38)
+            .fontSize(13)
             .fontColor('#FFFFFF')
             .backgroundColor('#0F766E')
             .borderRadius(8)
+            .padding({ left: 2, right: 2 })
             .onClick(() => {
               this.showImportPanel = !this.showImportPanel;
             })
           Button('本地文件')
             .layoutWeight(1)
             .height(38)
+            .fontSize(13)
             .fontColor('#0F172A')
             .backgroundColor('#EEF2F7')
             .borderRadius(8)
+            .padding({ left: 2, right: 2 })
             .onClick(() => {
               if (this.onImportLocalFile) {
                 this.onImportLocalFile();
@@ -48,12 +53,27 @@ export struct ProfilePage {
           Button('剪贴板')
             .layoutWeight(1)
             .height(38)
+            .fontSize(13)
             .fontColor('#0F172A')
             .backgroundColor('#EEF2F7')
             .borderRadius(8)
+            .padding({ left: 2, right: 2 })
             .onClick(() => {
               if (this.onImportFromClipboard) {
                 this.onImportFromClipboard();
+              }
+            })
+          Button('扫二维码')
+            .layoutWeight(1)
+            .height(38)
+            .fontSize(13)
+            .fontColor('#0F172A')
+            .backgroundColor('#EEF2F7')
+            .borderRadius(8)
+            .padding({ left: 2, right: 2 })
+            .onClick(() => {
+              if (this.onScanQrCode) {
+                this.onScanQrCode();
               }
             })
         }

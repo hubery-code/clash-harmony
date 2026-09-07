@@ -24,6 +24,7 @@ import {
 import { VpnService } from '../services/VpnService';
 import { TcpDelayTestService } from '../services/TcpDelayTestService';
 import { createDefaultFilterConfig, ProxyFilterConfig, ProxyFilterService } from '../services/ProxyFilterService';
+import { QrCodeScanImportResult, QrCodeScanImportService } from '../services/QrCodeScanImportService';
 
 interface NavItem {
   key: string;
@@ -561,6 +562,17 @@ struct Index {
     this.statusMessage = '请选择本地 YAML 或订阅文本文件...';
     const context = getContext(this) as common.Context;
     const result: FileImportResult = await LocalFileImportService.pickAndImport(context);
+    this.applyProfileState(result.state);
+    await this.refreshProxyNodes(result.state);
+    this.statusMessage = result.message;
+    this.syncHomeRuntimeFields();
+    this.recordLog(result.ok ? 'info' : 'warn', result.message);
+  }
+
+  private async importFromQrCode(): Promise<void> {
+    this.statusMessage = '正在启动扫码...';
+    const context = getContext(this) as common.Context;
+    const result: QrCodeScanImportResult = await QrCodeScanImportService.scanAndImport(context);
     this.applyProfileState(result.state);
     await this.refreshProxyNodes(result.state);
     this.statusMessage = result.message;
@@ -2314,16 +2326,19 @@ struct Index {
   private ProfileScreen() {
     Scroll() {
       Column({ space: 12 }) {
-        Row({ space: 8 }) {
-          Button('导入订阅').layoutWeight(1).height(38).fontColor('#FFFFFF')
-            .backgroundColor('#0F766E').borderRadius(8)
+        Row({ space: 6 }) {
+          Button('导入订阅').layoutWeight(1).height(38).fontSize(13).fontColor('#FFFFFF')
+            .backgroundColor('#0F766E').borderRadius(8).padding({ left: 2, right: 2 })
             .onClick(() => { this.showImportPanel = !this.showImportPanel })
-          Button('本地文件').layoutWeight(1).height(38).fontColor('#0F172A')
-            .backgroundColor('#EEF2F7').borderRadius(8)
+          Button('本地文件').layoutWeight(1).height(38).fontSize(13).fontColor('#0F172A')
+            .backgroundColor('#EEF2F7').borderRadius(8).padding({ left: 2, right: 2 })
             .onClick(() => { this.importLocalFile() })
-          Button('剪贴板').layoutWeight(1).height(38).fontColor('#0F172A')
-            .backgroundColor('#EEF2F7').borderRadius(8)
+          Button('剪贴板').layoutWeight(1).height(38).fontSize(13).fontColor('#0F172A')
+            .backgroundColor('#EEF2F7').borderRadius(8).padding({ left: 2, right: 2 })
             .onClick(() => { this.importFromClipboard() })
+          Button('扫二维码').layoutWeight(1).height(38).fontSize(13).fontColor('#0F172A')
+            .backgroundColor('#EEF2F7').borderRadius(8).padding({ left: 2, right: 2 })
+            .onClick(() => { this.importFromQrCode() })
         }
 
         if (this.showImportPanel) { this.ImportPanel() }

@@ -33,6 +33,7 @@ const runtimeVersionServiceSource = fs.readFileSync(path.join(root, 'entry/src/m
 const trafficPollerSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/TrafficPollerService.ets'), 'utf8');
 const tunForwarderSource = fs.readFileSync(path.join(root, 'entry/src/main/cpp/tun_forwarder.cpp'), 'utf8');
 const proxyFilterSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/ProxyFilterService.ets'), 'utf8');
+const qrCodeScanServiceSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/QrCodeScanImportService.ets'), 'utf8');
 
 // Index.ets shell assertions (orchestration logic still in Index)
 assert.match(indexSource, /private async prepareRuntimeForConnection/);
@@ -202,6 +203,14 @@ assert.equal(simulateFilter(filterNode2, { excludeText: '0.3', hideTimeout: fals
 assert.equal(simulateFilter(filterNode1, { excludeText: '', hideTimeout: false, quickExcludes: ['0.3'] }), true);
 assert.equal(simulateFilter(filterNode3, { excludeText: '', hideTimeout: true, quickExcludes: [] }), true);
 assert.equal(simulateFilter(filterNode2, { excludeText: '', hideTimeout: true, quickExcludes: [] }), false);
+
+// QR code scan import assertions
+assert.match(indexSource, /importFromQrCode/);
+assert.match(indexSource, /Button\('扫二维码'\)/);
+assert.match(profilePageSource, /Button\('扫二维码'\)/);
+assert.match(qrCodeScanServiceSource, /scanBarcode\.startScanForResult/);
+assert.match(qrCodeScanServiceSource, /importScannedContent/);
+assert.match(qrCodeScanServiceSource, /clash:\/\/install-config/);
 
 const proxyNodeRowBlock = indexSource.match(/private ProxyNodeRow\(node: ProxyNode\) \{[\s\S]*?\n  \}/);
 assert.ok(proxyNodeRowBlock, 'ProxyNodeRow should exist');
