@@ -204,6 +204,11 @@ struct Index {
   private proxyHealthDelay: number = 0;
   private proxyHealthNode: string = '';
   private proxyDelayCache: Record<string, ProxyDelayState> = {};
+  private lastJsonNumberRaw: string = '';
+  private lastJsonNumberParsed: Record<string, Object> | null = null;
+  private cachedVisibleProxyNodes: ProxyNode[] = [];
+  private cachedVisibleProxyNodesKey: string = '';
+  private cachedVisibleProxyNodesRef: ProxyNode[] | null = null;
 
   aboutToAppear(): void {
     hilog.info(LOG_DOMAIN, LOG_TAG, 'Index aboutToAppear, loading profiles');
@@ -866,6 +871,22 @@ struct Index {
     this.selectedProxyGroup = '';
   }
 
+  private areProxyNodesEqual(a: ProxyNode[], b: ProxyNode[]): boolean {
+    if (a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      if (a[i].name !== b[i].name ||
+          a[i].selected !== b[i].selected ||
+          a[i].delay !== b[i].delay ||
+          a[i].status !== b[i].status ||
+          a[i].meta !== b[i].meta) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private applySelectedProxyGroup(): void {
     const group: ProxyGroupInfo | undefined = this.findSelectedProxyGroup();
     if (!group) {
@@ -884,8 +905,13 @@ struct Index {
         status: delayState.status
       });
     }
-    this.proxyNodes = nodes;
-    this.proxyStatus = `${group.name} · 当前 ${group.now.length > 0 ? group.now : '未选择'} · ${group.all.length} 个节点`;
+    if (!this.areProxyNodesEqual(this.proxyNodes, nodes)) {
+      this.proxyNodes = nodes;
+    }
+    const newProxyStatus: string = `${group.name} · 当前 ${group.now.length > 0 ? group.now : '未选择'} · ${group.all.length} 个节点`;
+    if (this.proxyStatus !== newProxyStatus) {
+      this.proxyStatus = newProxyStatus;
+    }
     this.syncHomeRuntimeFields();
   }
 
@@ -1086,28 +1112,46 @@ struct Index {
 
   private getVisibleProxyNodes(): ProxyNode[] {
     const query: string = this.proxySearchText.trim().toLowerCase();
+    const configKey: string = `${this.proxyFilterConfig.excludeText}:${this.proxyFilterConfig.hideTimeout}:${this.proxyFilterConfig.quickExcludes.join('|')}`;
+    const cacheKey: string = `${query}:${this.proxySortByDelay ? 1 : 0}:${configKey}:${this.proxyNodes.length}`;
+
+    if (this.cachedVisibleProxyNodesRef === this.proxyNodes && this.cachedVisibleProxyNodesKey === cacheKey) {
+      return this.cachedVisibleProxyNodes;
+    }
+
+    const precomputedKeywords: string[] = ProxyFilterService.getNormalizedKeywords(this.proxyFilterConfig);
+    const hasKeywords: boolean = precomputedKeywords.length > 0;
+    const hasFilter: boolean = this.proxyFilterConfig.hideTimeout || hasKeywords;
     let result: ProxyNode[] = [];
-    for (let index = 0; index < this.proxyNodes.length; index++) {
-      const node: ProxyNode = this.proxyNodes[index];
-      if (ProxyFilterService.shouldExclude(node.name, node.meta, node.delay, node.status ? node.status : '', this.proxyFilterConfig)) {
-        continue;
+
+    if (!hasFilter && query.length === 0 && !this.proxySortByDelay) {
+      result = this.proxyNodes;
+    } else {
+      for (let index = 0; index < this.proxyNodes.length; index++) {
+        const node: ProxyNode = this.proxyNodes[index];
+        if (hasFilter && ProxyFilterService.shouldExclude(node.name, node.meta, node.delay, node.status ? node.status : '', this.proxyFilterConfig, precomputedKeywords)) {
+          continue;
+        }
+        if (query.length === 0) {
+          result.push(node);
+          continue;
+        }
+        const haystack: string = `${node.name} ${node.meta}`.toLowerCase();
+        if (haystack.indexOf(query) >= 0) {
+          result.push(node);
+        }
       }
-      if (query.length === 0) {
-        result.push(node);
-        continue;
-      }
-      const haystack: string = `${node.name} ${node.meta}`.toLowerCase();
-      if (haystack.indexOf(query) >= 0) {
-        result.push(node);
+
+      if (this.proxySortByDelay) {
+        result = result.slice().sort((a: ProxyNode, b: ProxyNode): number => {
+          return this.compareProxyNodeDelay(a, b);
+        });
       }
     }
 
-    if (this.proxySortByDelay) {
-      result = result.slice().sort((a: ProxyNode, b: ProxyNode): number => {
-        return this.compareProxyNodeDelay(a, b);
-      });
-    }
-
+    this.cachedVisibleProxyNodesRef = this.proxyNodes;
+    this.cachedVisibleProxyNodesKey = cacheKey;
+    this.cachedVisibleProxyNodes = result;
     return result;
   }
 
@@ -1212,10 +1256,13 @@ struct Index {
 
   private getVisibleProxyNodeIndexes(): number[] {
     const query: string = this.proxySearchText.trim().toLowerCase();
+    const precomputedKeywords: string[] = ProxyFilterService.getNormalizedKeywords(this.proxyFilterConfig);
+    const hasKeywords: boolean = precomputedKeywords.length > 0;
+    const hasFilter: boolean = this.proxyFilterConfig.hideTimeout || hasKeywords;
     const indexes: number[] = [];
     for (let index = 0; index < this.proxyNodes.length; index++) {
       const node: ProxyNode = this.proxyNodes[index];
-      if (ProxyFilterService.shouldExclude(node.name, node.meta, node.delay, node.status ? node.status : '', this.proxyFilterConfig)) {
+      if (hasFilter && ProxyFilterService.shouldExclude(node.name, node.meta, node.delay, node.status ? node.status : '', this.proxyFilterConfig, precomputedKeywords)) {
         continue;
       }
       if (query.length === 0) {
@@ -1632,7 +1679,14 @@ struct Index {
 
   private readJsonNumber(raw: string, key: string): number {
     try {
-      const parsed = JSON.parse(raw) as Record<string, Object>;
+      let parsed: Record<string, Object>;
+      if (this.lastJsonNumberRaw === raw && this.lastJsonNumberParsed !== null) {
+        parsed = this.lastJsonNumberParsed;
+      } else {
+        parsed = JSON.parse(raw) as Record<string, Object>;
+        this.lastJsonNumberRaw = raw;
+        this.lastJsonNumberParsed = parsed;
+      }
       const value = parsed[key];
       if (typeof value === 'number') {
         return value as number;

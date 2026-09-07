@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
+#include <poll.h>
 #include <unistd.h>
 
 TunForwarder::TunForwarder() = default;
@@ -101,7 +102,36 @@ void TunForwarder::WorkerLoop()
     uint8_t readBuffer[TUN_READ_BUFFER_SIZE];
     uint8_t writeBuffer[TUN_READ_BUFFER_SIZE];
 
+    struct pollfd pfd;
+    pfd.fd = m_tunFd;
+    pfd.events = POLLIN;
+    pfd.revents = 0;
+
     while (m_active.load()) {
+        int pollRet = poll(&pfd, 1, 100);
+        if (pollRet < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            m_stats.readErrors.fetch_add(1);
+            m_lastError = std::string("poll error: ") + strerror(errno);
+            break;
+        }
+
+        if (pollRet == 0) {
+            // Timeout with no packet to read; loop back to check m_active
+            continue;
+        }
+
+        if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+            // Device error or closed
+            break;
+        }
+
+        if (!(pfd.revents & POLLIN)) {
+            continue;
+        }
+
         ssize_t bytesRead = read(m_tunFd, readBuffer, TUN_READ_BUFFER_SIZE);
 
         if (bytesRead < 0) {

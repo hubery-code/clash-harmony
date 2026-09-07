@@ -19,6 +19,9 @@ const STORE_NAME: string = 'clash_harmony_preferences';
 const KEY_FILTER_CONFIG: string = 'proxy_filter_config';
 
 export class ProxyFilterService {
+  private static cachedRawKey: string = '';
+  private static cachedKeywords: string[] = [];
+
   static async loadConfig(context: common.Context): Promise<ProxyFilterConfig> {
     try {
       const store: preferences.Preferences = await preferences.getPreferences(context, STORE_NAME);
@@ -66,14 +69,14 @@ export class ProxyFilterService {
     }
   }
 
-  static shouldExclude(name: string, meta: string, delay: string, status: string, config: ProxyFilterConfig): boolean {
+  static shouldExclude(name: string, meta: string, delay: string, status: string, config: ProxyFilterConfig, precomputedKeywords?: string[]): boolean {
     if (config.hideTimeout) {
       if (delay === 'timeout' || status === 'dead') {
         return true;
       }
     }
 
-    const allKeywords: string[] = ProxyFilterService.getNormalizedKeywords(config);
+    const allKeywords: string[] = precomputedKeywords ? precomputedKeywords : ProxyFilterService.getNormalizedKeywords(config);
     if (allKeywords.length === 0) {
       return false;
     }
@@ -89,6 +92,11 @@ export class ProxyFilterService {
   }
 
   static getNormalizedKeywords(config: ProxyFilterConfig): string[] {
+    const key: string = `${config.excludeText}:::${config.quickExcludes.join('|')}`;
+    if (key === ProxyFilterService.cachedRawKey) {
+      return ProxyFilterService.cachedKeywords;
+    }
+
     const list: string[] = [];
     for (let i = 0; i < config.quickExcludes.length; i++) {
       const tag: string = config.quickExcludes[i].trim().toLowerCase();
@@ -106,6 +114,9 @@ export class ProxyFilterService {
         }
       }
     }
+
+    ProxyFilterService.cachedRawKey = key;
+    ProxyFilterService.cachedKeywords = list;
     return list;
   }
 
