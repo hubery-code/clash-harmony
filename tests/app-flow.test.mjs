@@ -32,6 +32,7 @@ const enhanceServiceSource = fs.readFileSync(path.join(root, 'entry/src/main/ets
 const runtimeVersionServiceSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/RuntimeConfigVersionService.ets'), 'utf8');
 const trafficPollerSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/TrafficPollerService.ets'), 'utf8');
 const tunForwarderSource = fs.readFileSync(path.join(root, 'entry/src/main/cpp/tun_forwarder.cpp'), 'utf8');
+const proxyFilterSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/ProxyFilterService.ets'), 'utf8');
 
 // Index.ets shell assertions (orchestration logic still in Index)
 assert.match(indexSource, /private async prepareRuntimeForConnection/);
@@ -150,12 +151,57 @@ assert.match(proxyModeOptionSource, /\.onClick\(\(\) => \{ this\.changeProxyMode
 const proxyScreenBlock = indexSource.match(/private ProxyScreen\(\) \{[\s\S]*?\n  \}/);
 assert.ok(proxyScreenBlock, 'ProxyScreen should exist');
 const proxyScreenSource = proxyScreenBlock[0];
-assert.match(proxyScreenSource, /`节点列表 · \$\{this\.getVisibleProxyNodes\(\)\.length\}\/\$\{this\.proxyNodes\.length\}`/);
+assert.match(proxyScreenSource, /this\.getProxyNodeListTitle\(\)/);
+assert.match(proxyScreenSource, /this\.ProxyFilterPanel\(\)/);
+assert.match(proxyScreenSource, /this\.getFilterButtonLabel\(\)/);
 assert.match(proxyScreenSource, /Text\(this\.isSpeedTesting \? '测速中' : '测速'\)/);
 assert.match(proxyScreenSource, /backgroundColor\(this\.isSpeedTesting \? '#64748B' : '#2563EB'\)/);
 assert.match(proxyScreenSource, /if \(this\.speedTestProgress\.length > 0\)/);
 assert.match(proxyScreenSource, /ForEach\(this\.getVisibleProxyNodes\(\),/);
 assert.doesNotMatch(proxyScreenSource, /getVisibleProxyNodes\(\)\.slice|slice\(0,\s*\d+\)|this\.proxyNodes\.length > \d+/);
+
+// Proxy filter service assertions
+assert.match(proxyFilterSource, /export interface ProxyFilterConfig/);
+assert.match(proxyFilterSource, /excludeText: string/);
+assert.match(proxyFilterSource, /hideTimeout: boolean/);
+assert.match(proxyFilterSource, /quickExcludes: string\[\]/);
+assert.match(proxyFilterSource, /class ProxyFilterService/);
+assert.match(proxyFilterSource, /static shouldExclude\(/);
+assert.match(proxyFilterSource, /static getNormalizedKeywords\(/);
+assert.match(proxyFilterSource, /static countActiveFilters\(/);
+
+function simulateFilter(node, config) {
+  if (config.hideTimeout && (node.delay === 'timeout' || node.status === 'dead')) {
+    return true;
+  }
+  const keywords = [];
+  for (const tag of config.quickExcludes || []) {
+    const t = tag.trim().toLowerCase();
+    if (t && !keywords.includes(t)) keywords.push(t);
+  }
+  if (config.excludeText) {
+    const tokens = config.excludeText.split(/[,，、;\s\n]+/);
+    for (const token of tokens) {
+      const t = token.trim().toLowerCase();
+      if (t && !keywords.includes(t)) keywords.push(t);
+    }
+  }
+  if (keywords.length === 0) return false;
+  const target = `${node.name} ${node.meta || ''}`.toLowerCase();
+  return keywords.some((kw) => target.includes(kw));
+}
+
+const filterNode1 = { name: '香港 01 [VIP] | 0.3x', meta: 'Shadowsocks', delay: '45ms' };
+const filterNode2 = { name: '日本 02 [VIP] | 1.0x', meta: 'Shadowsocks', delay: '80ms' };
+const filterNode3 = { name: '美国 03 | 0.5x', meta: 'Trojan', delay: 'timeout' };
+
+assert.equal(simulateFilter(filterNode1, { excludeText: '香港', hideTimeout: false, quickExcludes: [] }), true);
+assert.equal(simulateFilter(filterNode2, { excludeText: '香港', hideTimeout: false, quickExcludes: [] }), false);
+assert.equal(simulateFilter(filterNode1, { excludeText: '0.3', hideTimeout: false, quickExcludes: [] }), true);
+assert.equal(simulateFilter(filterNode2, { excludeText: '0.3', hideTimeout: false, quickExcludes: [] }), false);
+assert.equal(simulateFilter(filterNode1, { excludeText: '', hideTimeout: false, quickExcludes: ['0.3'] }), true);
+assert.equal(simulateFilter(filterNode3, { excludeText: '', hideTimeout: true, quickExcludes: [] }), true);
+assert.equal(simulateFilter(filterNode2, { excludeText: '', hideTimeout: true, quickExcludes: [] }), false);
 
 const proxyNodeRowBlock = indexSource.match(/private ProxyNodeRow\(node: ProxyNode\) \{[\s\S]*?\n  \}/);
 assert.ok(proxyNodeRowBlock, 'ProxyNodeRow should exist');

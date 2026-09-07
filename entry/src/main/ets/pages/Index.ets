@@ -23,6 +23,7 @@ import {
 } from '../services/TrafficPollerService';
 import { VpnService } from '../services/VpnService';
 import { TcpDelayTestService } from '../services/TcpDelayTestService';
+import { createDefaultFilterConfig, ProxyFilterConfig, ProxyFilterService } from '../services/ProxyFilterService';
 
 interface NavItem {
   key: string;
@@ -155,6 +156,8 @@ struct Index {
   @State private pendingProxyName: string = '';
   @State private isSpeedTesting: boolean = false;
   @State private proxySortByDelay: boolean = false;
+  @State private showProxyFilterPanel: boolean = false;
+  @State private proxyFilterConfig: ProxyFilterConfig = createDefaultFilterConfig();
   @State private speedTestProgress: string = '';
   @State private speedTestSummary: string = '';
   @State private diagSegment: string = '连接';
@@ -214,6 +217,7 @@ struct Index {
 
   private async loadProfiles(): Promise<void> {
     const context = getContext(this) as common.Context;
+    this.proxyFilterConfig = await ProxyFilterService.loadConfig(context);
     const state: ProfileState = await ProfileStore.load(context);
     this.runtimeConfigPath = RuntimeConfigService.getRuntimeConfigPath(context);
     this.applyProfileState(state);
@@ -221,6 +225,12 @@ struct Index {
     await this.resumeRuntimeIfControllerAvailable();
     hilog.info(LOG_DOMAIN, LOG_TAG, 'Profiles loaded: %{public}d items, currentUid=%{public}s',
       state.items.length, state.currentUid);
+  }
+
+  private async updateFilterConfig(config: ProxyFilterConfig): Promise<void> {
+    this.proxyFilterConfig = config;
+    const context = getContext(this) as common.Context;
+    await ProxyFilterService.saveConfig(context, config);
   }
 
   private async toggleVpn(): Promise<void> {
@@ -1067,6 +1077,9 @@ struct Index {
     let result: ProxyNode[] = [];
     for (let index = 0; index < this.proxyNodes.length; index++) {
       const node: ProxyNode = this.proxyNodes[index];
+      if (ProxyFilterService.shouldExclude(node, this.proxyFilterConfig)) {
+        continue;
+      }
       if (query.length === 0) {
         result.push(node);
         continue;
@@ -1084,6 +1097,69 @@ struct Index {
     }
 
     return result;
+  }
+
+  private getProxyNodeListTitle(): string {
+    const visibleCount: number = this.getVisibleProxyNodes().length;
+    const totalCount: number = this.proxyNodes.length;
+    const filteredCount: number = totalCount - visibleCount;
+    if (filteredCount > 0 && this.proxySearchText.trim().length === 0) {
+      return `节点列表 · ${visibleCount}/${totalCount} (已过滤 ${filteredCount})`;
+    }
+    return `节点列表 · ${visibleCount}/${totalCount}`;
+  }
+
+  private getFilterButtonLabel(): string {
+    const count: number = ProxyFilterService.countActiveFilters(this.proxyFilterConfig);
+    if (count > 0) {
+      return `过滤 · ${count}`;
+    }
+    return '过滤';
+  }
+
+  private toggleQuickExclude(tag: string): void {
+    const list: string[] = [];
+    let found: boolean = false;
+    for (let i = 0; i < this.proxyFilterConfig.quickExcludes.length; i++) {
+      const item: string = this.proxyFilterConfig.quickExcludes[i];
+      if (item === tag) {
+        found = true;
+      } else {
+        list.push(item);
+      }
+    }
+    if (!found) {
+      list.push(tag);
+    }
+    const newConfig: ProxyFilterConfig = {
+      excludeText: this.proxyFilterConfig.excludeText,
+      hideTimeout: this.proxyFilterConfig.hideTimeout,
+      quickExcludes: list
+    };
+    this.updateFilterConfig(newConfig);
+  }
+
+  private toggleHideTimeout(): void {
+    const newConfig: ProxyFilterConfig = {
+      excludeText: this.proxyFilterConfig.excludeText,
+      hideTimeout: !this.proxyFilterConfig.hideTimeout,
+      quickExcludes: this.proxyFilterConfig.quickExcludes
+    };
+    this.updateFilterConfig(newConfig);
+  }
+
+  private updateExcludeText(text: string): void {
+    const newConfig: ProxyFilterConfig = {
+      excludeText: text,
+      hideTimeout: this.proxyFilterConfig.hideTimeout,
+      quickExcludes: this.proxyFilterConfig.quickExcludes
+    };
+    this.updateFilterConfig(newConfig);
+  }
+
+  private clearProxyFilters(): void {
+    const newConfig: ProxyFilterConfig = createDefaultFilterConfig();
+    this.updateFilterConfig(newConfig);
   }
 
   private compareProxyNodeDelay(a: ProxyNode, b: ProxyNode): number {
@@ -1123,11 +1199,14 @@ struct Index {
     const query: string = this.proxySearchText.trim().toLowerCase();
     const indexes: number[] = [];
     for (let index = 0; index < this.proxyNodes.length; index++) {
+      const node: ProxyNode = this.proxyNodes[index];
+      if (ProxyFilterService.shouldExclude(node, this.proxyFilterConfig)) {
+        continue;
+      }
       if (query.length === 0) {
         indexes.push(index);
         continue;
       }
-      const node: ProxyNode = this.proxyNodes[index];
       const haystack: string = `${node.name} ${node.meta}`.toLowerCase();
       if (haystack.indexOf(query) >= 0) {
         indexes.push(index);
@@ -1993,9 +2072,33 @@ struct Index {
         }
         .padding(4).backgroundColor('#EEF2F7').borderRadius(8)
 
-        TextInput({ placeholder: '搜索节点、地区或提供者', text: this.proxySearchText })
-          .height(40).backgroundColor('#FFFFFF').borderRadius(8)
-          .onChange((value: string) => { this.proxySearchText = value })
+        Row({ space: 8 }) {
+          TextInput({ placeholder: '搜索节点、地区或提供者', text: this.proxySearchText })
+            .layoutWeight(1)
+            .height(40)
+            .backgroundColor('#FFFFFF')
+            .borderRadius(8)
+            .onChange((value: string) => { this.proxySearchText = value })
+
+          Text(this.getFilterButtonLabel())
+            .height(40)
+            .padding({ left: 12, right: 12 })
+            .fontSize(13)
+            .fontWeight(ProxyFilterService.countActiveFilters(this.proxyFilterConfig) > 0 ? FontWeight.Bold : FontWeight.Regular)
+            .fontColor(ProxyFilterService.countActiveFilters(this.proxyFilterConfig) > 0 ? '#1D4ED8' : '#475569')
+            .backgroundColor(this.showProxyFilterPanel || ProxyFilterService.countActiveFilters(this.proxyFilterConfig) > 0 ? '#DBEAFE' : '#FFFFFF')
+            .borderRadius(8)
+            .border({ width: 1, color: ProxyFilterService.countActiveFilters(this.proxyFilterConfig) > 0 ? '#93C5FD' : '#E2E8F0' })
+            .textAlign(TextAlign.Center)
+            .onClick(() => {
+              this.showProxyFilterPanel = !this.showProxyFilterPanel;
+            })
+        }
+        .width('100%')
+
+        if (this.showProxyFilterPanel) {
+          this.ProxyFilterPanel()
+        }
 
         if (this.proxyGroups.length > 0) {
           Scroll() {
@@ -2019,7 +2122,7 @@ struct Index {
 
         Column({ space: 8 }) {
           Row() {
-            Text(`节点列表 · ${this.getVisibleProxyNodes().length}/${this.proxyNodes.length}`).fontSize(15).fontWeight(FontWeight.Bold)
+            Text(this.getProxyNodeListTitle()).fontSize(15).fontWeight(FontWeight.Bold)
             Row({ space: 6 }) {
               Text(this.proxySortByDelay ? '延迟排序' : '默认排序').height(30).fontSize(12).textAlign(TextAlign.Center)
                 .fontColor(this.proxySortByDelay ? '#0F766E' : '#64748B')
@@ -2059,6 +2162,116 @@ struct Index {
       .padding(16)
     }
     .layoutWeight(1)
+  }
+
+  @Builder
+  private FilterTag(tag: string) {
+    Text(tag)
+      .fontSize(12)
+      .fontColor(this.proxyFilterConfig.quickExcludes.indexOf(tag) >= 0 ? '#1D4ED8' : '#475569')
+      .backgroundColor(this.proxyFilterConfig.quickExcludes.indexOf(tag) >= 0 ? '#DBEAFE' : '#F1F5F9')
+      .padding({ top: 5, bottom: 5, left: 10, right: 10 })
+      .borderRadius(6)
+      .border({ width: 1, color: this.proxyFilterConfig.quickExcludes.indexOf(tag) >= 0 ? '#93C5FD' : '#CBD5E1' })
+      .margin({ right: 6, bottom: 6 })
+      .onClick(() => {
+        this.toggleQuickExclude(tag);
+      })
+  }
+
+  @Builder
+  private TimeoutFilterTag() {
+    Text(this.proxyFilterConfig.hideTimeout ? '已隐藏超时' : '隐藏超时')
+      .fontSize(12)
+      .fontColor(this.proxyFilterConfig.hideTimeout ? '#B91C1C' : '#475569')
+      .backgroundColor(this.proxyFilterConfig.hideTimeout ? '#FEE2E2' : '#F1F5F9')
+      .padding({ top: 5, bottom: 5, left: 10, right: 10 })
+      .borderRadius(6)
+      .border({ width: 1, color: this.proxyFilterConfig.hideTimeout ? '#FCA5A5' : '#CBD5E1' })
+      .margin({ right: 6, bottom: 6 })
+      .onClick(() => {
+        this.toggleHideTimeout();
+      })
+  }
+
+  @Builder
+  private ProxyFilterPanel() {
+    Column({ space: 10 }) {
+      Row() {
+        Row({ space: 6 }) {
+          Text('节点排除过滤')
+            .fontSize(14)
+            .fontWeight(FontWeight.Bold)
+            .fontColor('#0F172A')
+          if (ProxyFilterService.countActiveFilters(this.proxyFilterConfig) > 0) {
+            Text(`(生效中: ${ProxyFilterService.countActiveFilters(this.proxyFilterConfig)})`)
+              .fontSize(12)
+              .fontColor('#2563EB')
+          }
+        }
+        Row({ space: 10 }) {
+          if (ProxyFilterService.countActiveFilters(this.proxyFilterConfig) > 0) {
+            Text('清空')
+              .fontSize(12)
+              .fontColor('#EF4444')
+              .onClick(() => {
+                this.clearProxyFilters();
+              })
+          }
+          Text('收起')
+            .fontSize(12)
+            .fontColor('#64748B')
+            .onClick(() => {
+              this.showProxyFilterPanel = false;
+            })
+        }
+      }
+      .width('100%')
+      .justifyContent(FlexAlign.SpaceBetween)
+
+      Column({ space: 4 }) {
+        Text('自定义排除词（逗号或空格分隔）')
+          .fontSize(12)
+          .fontColor('#64748B')
+          .width('100%')
+
+        TextInput({ placeholder: '例如: 香港, 0.3, 官网, 试用', text: this.proxyFilterConfig.excludeText })
+          .height(38)
+          .backgroundColor('#F8FAFC')
+          .borderRadius(6)
+          .border({ width: 1, color: '#CBD5E1' })
+          .onChange((value: string) => {
+            this.updateExcludeText(value);
+          })
+      }
+      .width('100%')
+
+      Column({ space: 6 }) {
+        Text('快捷排除标签（点击切换）')
+          .fontSize(12)
+          .fontColor('#64748B')
+          .width('100%')
+
+        Flex({ wrap: FlexWrap.Wrap }) {
+          this.TimeoutFilterTag()
+          this.FilterTag('0.3')
+          this.FilterTag('0.5')
+          this.FilterTag('香港')
+          this.FilterTag('台湾')
+          this.FilterTag('日本')
+          this.FilterTag('新加坡')
+          this.FilterTag('美国')
+          this.FilterTag('韩国')
+        }
+        .width('100%')
+      }
+      .width('100%')
+    }
+    .padding(12)
+    .backgroundColor('#FFFFFF')
+    .borderRadius(8)
+    .border({ width: 1, color: '#CBD5E1' })
+    .width('100%')
   }
 
   // ============== ProfileScreen ==============
