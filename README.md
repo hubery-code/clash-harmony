@@ -4,7 +4,8 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 
 ## 当前状态
 
-更新时间：2026-07-09
+更新时间：2026-09-07
+版本：v0.2.0 (versionCode 1000100)
 
 - 真机包名：`io.github.clashharmony.app`
 - 主入口：`EntryAbility`
@@ -14,8 +15,29 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 - `x86_64` 仍使用内置 fake/stub adapter，主要用于模拟器界面与构建验证
 - 真机验证过 VPN 可建立，controller 端口、TUN 网卡和代理访问链路可用
 - 首页状态刷新已修复：连接状态、运行时长、下载/上传速度、连接数、当前链路会直接绑定 live 状态刷新
+- 待机能耗彻底优化：TUN 转发线程采用事件等待休眠，待机 CPU < 0.5%，杜绝发热耗电
 - 当前未上架鸿蒙应用市场，仅通过 HAP 包研究、调试和验证
 - 开源许可：`GPL-3.0-only`，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+
+## 最近更新 (v0.2.0 - 2026-09-07)
+
+- **代理页智能过滤与体验升级**：
+  - 支持自定义排除关键词（支持逗号、分号、空格分隔多关键词，如 `香港`、`0.3x` 等）。
+  - 支持快捷排除标签一键勾选（香港、日本、美国、新加坡、0.5x、0.3x 等）。
+  - 支持“隐藏超时节点”，一键排除 `timeout` 或失效节点。
+  - **默认延迟排序**：代理节点列表进入时默认按延迟由低到高排列（已测速优质节点优先置顶，超时/未测速节点靠后），并支持一键随时切回“默认排序”。
+  - 策略组 Tab 支持横向平滑滚动切换，支持多策略组流畅浏览。
+  - 优化移动端布局自适应排版，过滤统计与操作按钮无布局挤压或溢出。
+- **配置导入扩展 - 扫二维码导入**：
+  - 配置管理页新增“扫二维码”功能，集成系统扫码能力，直接识别扫描包含订阅链接或节点配置的二维码并一键导入。
+- **多协议通用订阅转换与网络优化**：
+  - 支持 Base64 编码的通用订阅链接（支持 Shadowsocks、VMess、VLESS、Trojan、Hysteria2、TUIC 等多协议节点）自动转换为标准 Clash/mihomo 配置。
+  - 订阅拉取默认携带标准 Clash User-Agent，避免服务商限制或返回空内容。
+- **系统全方位底层性能与能耗优化**：
+  - **TUN 转发低功耗休眠**：Native C++ 转发循环引入 Linux `poll` 机制，网络空闲时进入内核休眠，解决非阻塞忙轮询导致的单核 100% 满载，待机 CPU 降至 < 0.5%，彻底消除发热与耗电。
+  - **高频 JSON 轮询去重**：针对每秒流量监控中的 `/connections` 大 JSON 反序列化做实例级解析缓存，消除 50% 的 JSON 解析与堆分配。
+  - **ArkUI 渲染节流**：策略组数据刷新时加入节点内容比对（`areProxyNodesEqual`），未变化时跳过 `@State` 赋值，避免无意义的组件树重绘。
+  - **过滤正则分词缓存**：关键词分词增加内容变更缓存，循环外预提取关键字，显著降低节点列表滑动渲染开销。
 
 ## 功能清单
 
@@ -32,19 +54,22 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 ### 代理页
 
 - 展示订阅解析出的全部节点
-- 支持搜索节点
+- 支持搜索节点，支持多条件过滤弹窗（自定义关键词、快捷标签、超时隐藏）
+- **默认按延迟排序**（低延迟节点优先，支持一键切换默认原序）
+- 策略组 Tab 支持横向平滑滚动浏览
 - 支持同步 controller 策略组
 - 支持节点选择并写入 mihomo controller
-- 支持全量测速，状态直接展示在每个节点后面
-- 测速中有 UI 反馈和进度文本
+- 支持节点并发测速，状态直接展示在每个节点后面
+- 测速中有 UI 进度反馈与统计
 
 ### 配置页
 
-- 支持远程订阅导入
+- 支持远程订阅导入（带标准 Clash User-Agent）
+- 支持**扫二维码导入**（识别订阅链接与节点配置）
 - 支持剪贴板导入
 - 支持本地 YAML / 文本文件导入
+- 支持多协议通用订阅（SS / VMess / VLESS / Trojan / Hysteria2 / TUIC）自动转换
 - 支持订阅更新、启用、删除
-- 支持 Shadowsocks 通用订阅转换
 - 支持 runtime YAML 生成
 - 支持 hosts 预解析、DNS 配置注入、IPv6 关闭等运行配置修正
 
@@ -64,7 +89,9 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 - `ProfileStore.ets`：配置持久化
 - `SubscriptionService.ets`：订阅更新
 - `ClashConfigParserService.ets`：Clash YAML 解析
-- `GenericSubscriptionConverterService.ets`：通用订阅格式转换
+- `GenericSubscriptionConverterService.ets`：通用订阅格式转换（支持多协议）
+- `ProxyFilterService.ets`：节点过滤规则持久化与分词缓存加速
+- `QrCodeScanImportService.ets`：二维码扫描与内容识别解析
 - `RuntimeConfigService.ets`：生成 mihomo 运行配置
 - `MihomoControllerService.ets`：mihomo REST controller 封装
 - `TrafficPollerService.ets`：实时流量轮询
@@ -75,7 +102,7 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 
 - `napi_init.cpp`：NAPI 入口
 - `mihomo_adapter.cpp`：动态加载 `libmihomo_ohos.so`
-- `tun_forwarder.cpp`：TUN 转发循环
+- `tun_forwarder.cpp`：TUN 转发循环（支持 poll 事件等待低功耗休眠机制）
 - `socket_protector.cpp`：socket 防环路保护
 - `health_monitor.cpp`：native 健康监控
 

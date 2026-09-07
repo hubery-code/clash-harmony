@@ -156,7 +156,7 @@ struct Index {
   @State private pendingProxyGroup: string = '';
   @State private pendingProxyName: string = '';
   @State private isSpeedTesting: boolean = false;
-  @State private proxySortByDelay: boolean = false;
+  @State private proxySortByDelay: boolean = true;
   @State private showProxyFilterPanel: boolean = false;
   @State private proxyFilterConfig: ProxyFilterConfig = createDefaultFilterConfig();
   @State private speedTestProgress: string = '';
