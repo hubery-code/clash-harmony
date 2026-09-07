@@ -67,8 +67,8 @@ assert.match(indexSource, /已连接 · \$\{version\} · \$\{connections\.length
 assert.match(indexSource, /Text\(this\.modeLabel\(this\.proxyMode\)\)/);
 assert.match(indexSource, /Text\(this\.liveProfileName\)/);
 assert.match(indexSource, /Text\(this\.liveProxyName\)/);
-assert.match(indexSource, /APP_VERSION_NAME: string = 'v0\.1\.0'/);
-assert.match(indexSource, /APP_BUILD_UPDATED_AT: string = '2026-07-08 23:18'/);
+assert.match(indexSource, /APP_VERSION_NAME: string = 'v0\.2\.0'/);
+assert.match(indexSource, /APP_BUILD_UPDATED_AT: string = '2026-09-07 17:18'/);
 assert.match(indexSource, /DELAY_TEST_TIMEOUT_MS: number = 4500/);
 assert.match(indexSource, /https:\/\/cp\.cloudflare\.com\/generate_204/);
 assert.match(indexSource, /http:\/\/connectivitycheck\.platform\.hicloud\.com\/generate_204/);
