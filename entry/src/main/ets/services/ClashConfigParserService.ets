@@ -131,6 +131,10 @@ export class ClashConfigParserService {
     }
 
     let end: number = line.indexOf(',', index);
+    const braceIndex: number = line.indexOf('}', index);
+    if (braceIndex >= 0 && (end < 0 || braceIndex < end)) {
+      end = braceIndex;
+    }
     if (end < 0) {
       end = line.length;
     }
@@ -139,12 +143,15 @@ export class ClashConfigParserService {
 
   private static cleanValue(value: string): string {
     let text: string = value.trim();
+    while (text.endsWith('}') || text.endsWith(']')) {
+      text = text.substring(0, text.length - 1).trim();
+    }
     if (text.startsWith('"') && text.endsWith('"') && text.length >= 2) {
       text = text.substring(1, text.length - 1);
     }
     if (text.startsWith("'") && text.endsWith("'") && text.length >= 2) {
       text = text.substring(1, text.length - 1);
     }
-    return text;
+    return text.trim();
   }
 }

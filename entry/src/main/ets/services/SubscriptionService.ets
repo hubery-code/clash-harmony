@@ -83,6 +83,9 @@ export class SubscriptionService {
     try {
       const response: http.HttpResponse = await request.request(url, {
         method: http.RequestMethod.GET,
+        header: {
+          'User-Agent': 'ClashMeta/1.18.0 clash.meta'
+        },
         expectDataType: http.HttpDataType.STRING,
         readTimeout: 15000,
         connectTimeout: 8000,

@@ -9,6 +9,27 @@ export interface ConvertedSubscription {
   converted: boolean;
 }
 
+interface GenericNode {
+  name: string;
+  type: string;
+  server: string;
+  port: number;
+  cipher?: string;
+  password?: string;
+  uuid?: string;
+  plugin?: string;
+  pluginMode?: string;
+  pluginHost?: string;
+  sni?: string;
+  skipCertVerify?: boolean;
+  alpn?: string;
+  network?: string;
+  wsPath?: string;
+  wsHost?: string;
+  clientFingerprint?: string;
+  udpRelayMode?: string;
+}
+
 interface ShadowsocksNode {
   name: string;
   server: string;
@@ -37,11 +58,11 @@ export class GenericSubscriptionConverterService {
     const decoded: string = GenericSubscriptionConverterService.tryDecodeBase64(trimmed);
     const candidates: string[] = decoded.length > 0 ? [trimmed, decoded] : [trimmed];
     for (let index = 0; index < candidates.length; index++) {
-      const nodes: ShadowsocksNode[] = GenericSubscriptionConverterService.parseShadowsocksNodes(candidates[index]);
+      const nodes: GenericNode[] = GenericSubscriptionConverterService.parseNodes(candidates[index]);
       if (nodes.length > 0) {
         return {
           ok: true,
-          message: `已将通用 Shadowsocks 订阅转换为 Clash YAML`,
+          message: `已将通用订阅转换为 Clash YAML`,
           text: GenericSubscriptionConverterService.buildClashYaml(nodes),
           nodeCount: nodes.length,
           converted: true
@@ -51,11 +72,169 @@ export class GenericSubscriptionConverterService {
 
     return {
       ok: false,
-      message: '订阅内容不是 Clash/Mihomo YAML，也未识别到可转换的 Shadowsocks 节点',
+      message: '订阅内容不是 Clash/Mihomo YAML，也未识别到可转换的代理节点',
       text: '',
       nodeCount: 0,
       converted: false
     };
+  }
+
+  private static parseNodes(text: string): GenericNode[] {
+    const nodes: GenericNode[] = [];
+    const lines: string[] = text.split('\n');
+    for (let index = 0; index < lines.length; index++) {
+      const node: GenericNode | undefined = GenericSubscriptionConverterService.parseNodeUri(lines[index].trim(), nodes.length + 1);
+      if (node) {
+        nodes.push(node);
+      }
+    }
+    return nodes;
+  }
+
+  private static parseNodeUri(uri: string, fallbackIndex: number): GenericNode | undefined {
+    if (uri.startsWith('ss://')) {
+      const ssNode: ShadowsocksNode | undefined = GenericSubscriptionConverterService.parseShadowsocksUri(uri, fallbackIndex);
+      if (!ssNode) {
+        return undefined;
+      }
+      return {
+        type: 'ss',
+        name: ssNode.name,
+        server: ssNode.server,
+        port: ssNode.port,
+        cipher: ssNode.cipher,
+        password: ssNode.password,
+        plugin: ssNode.plugin,
+        pluginMode: ssNode.pluginMode,
+        pluginHost: ssNode.pluginHost
+      };
+    }
+
+    const colonSlash: number = uri.indexOf('://');
+    if (colonSlash < 0) {
+      return undefined;
+    }
+    const type: string = uri.substring(0, colonSlash).toLowerCase();
+    if (type !== 'trojan' && type !== 'hysteria2' && type !== 'hy2' && type !== 'tuic' && type !== 'vless' && type !== 'anytls') {
+      return undefined;
+    }
+
+    let body: string = uri.substring(colonSlash + 3);
+    let name: string = `${type.toUpperCase()}-${fallbackIndex}`;
+    const hashIndex: number = body.indexOf('#');
+    if (hashIndex >= 0) {
+      name = GenericSubscriptionConverterService.safeDecodeURIComponent(body.substring(hashIndex + 1));
+      body = body.substring(0, hashIndex);
+    }
+
+    let query: string = '';
+    const queryIndex: number = body.indexOf('?');
+    if (queryIndex >= 0) {
+      query = body.substring(queryIndex + 1);
+      body = body.substring(0, queryIndex);
+    }
+    if (body.endsWith('/')) {
+      body = body.substring(0, body.length - 1);
+    }
+
+    let userInfo: string = '';
+    let hostPort: string = '';
+    const atIndex: number = body.lastIndexOf('@');
+    if (atIndex < 0) {
+      return undefined;
+    }
+    userInfo = body.substring(0, atIndex);
+    hostPort = body.substring(atIndex + 1);
+
+    const hostPortIndex: number = GenericSubscriptionConverterService.findHostPortSeparator(hostPort);
+    if (hostPortIndex <= 0) {
+      return undefined;
+    }
+
+    const port: number = Number.parseInt(hostPort.substring(hostPortIndex + 1), 10);
+    if (Number.isNaN(port) || port <= 0) {
+      return undefined;
+    }
+    const server: string = GenericSubscriptionConverterService.cleanHost(hostPort.substring(0, hostPortIndex));
+
+    if (type === 'trojan') {
+      const sniVal: string = GenericSubscriptionConverterService.readQueryParam(query, 'sni');
+      const peerVal: string = GenericSubscriptionConverterService.readQueryParam(query, 'peer');
+      return {
+        type: 'trojan',
+        name: name.length > 0 ? name : `Trojan-${fallbackIndex}`,
+        server: server,
+        port: port,
+        password: userInfo,
+        sni: sniVal.length > 0 ? sniVal : peerVal,
+        skipCertVerify: GenericSubscriptionConverterService.readQueryParam(query, 'allowInsecure') === '1' ||
+          GenericSubscriptionConverterService.readQueryParam(query, 'insecure') === '1'
+      };
+    }
+
+    if (type === 'hysteria2' || type === 'hy2') {
+      return {
+        type: 'hysteria2',
+        name: name.length > 0 ? name : `Hysteria2-${fallbackIndex}`,
+        server: server,
+        port: port,
+        password: userInfo,
+        sni: GenericSubscriptionConverterService.readQueryParam(query, 'sni'),
+        skipCertVerify: GenericSubscriptionConverterService.readQueryParam(query, 'insecure') === '1' ||
+          GenericSubscriptionConverterService.readQueryParam(query, 'allowInsecure') === '1'
+      };
+    }
+
+    if (type === 'tuic') {
+      const colonIdx: number = userInfo.indexOf(':');
+      const uuid: string = colonIdx >= 0 ? userInfo.substring(0, colonIdx) : userInfo;
+      const password: string = colonIdx >= 0 ? userInfo.substring(colonIdx + 1) : '';
+      return {
+        type: 'tuic',
+        name: name.length > 0 ? name : `TUIC-${fallbackIndex}`,
+        server: server,
+        port: port,
+        uuid: uuid,
+        password: password,
+        sni: GenericSubscriptionConverterService.readQueryParam(query, 'sni'),
+        alpn: GenericSubscriptionConverterService.readQueryParam(query, 'alpn'),
+        skipCertVerify: GenericSubscriptionConverterService.readQueryParam(query, 'allow_insecure') === '1' ||
+          GenericSubscriptionConverterService.readQueryParam(query, 'insecure') === '1',
+        udpRelayMode: GenericSubscriptionConverterService.readQueryParam(query, 'udp_relay_mode')
+      };
+    }
+
+    if (type === 'vless') {
+      return {
+        type: 'vless',
+        name: name.length > 0 ? name : `VLESS-${fallbackIndex}`,
+        server: server,
+        port: port,
+        uuid: userInfo,
+        sni: GenericSubscriptionConverterService.readQueryParam(query, 'sni'),
+        skipCertVerify: GenericSubscriptionConverterService.readQueryParam(query, 'insecure') === '1' ||
+          GenericSubscriptionConverterService.readQueryParam(query, 'allowInsecure') === '1',
+        network: GenericSubscriptionConverterService.readQueryParam(query, 'type'),
+        wsPath: GenericSubscriptionConverterService.readQueryParam(query, 'path'),
+        wsHost: GenericSubscriptionConverterService.readQueryParam(query, 'host')
+      };
+    }
+
+    if (type === 'anytls') {
+      return {
+        type: 'anytls',
+        name: name.length > 0 ? name : `AnyTLS-${fallbackIndex}`,
+        server: server,
+        port: port,
+        password: userInfo,
+        sni: GenericSubscriptionConverterService.readQueryParam(query, 'sni'),
+        clientFingerprint: GenericSubscriptionConverterService.readQueryParam(query, 'fp'),
+        skipCertVerify: GenericSubscriptionConverterService.readQueryParam(query, 'insecure') === '1' ||
+          GenericSubscriptionConverterService.readQueryParam(query, 'allowInsecure') === '1'
+      };
+    }
+
+    return undefined;
   }
 
   private static parseShadowsocksNodes(text: string): ShadowsocksNode[] {
@@ -205,7 +384,7 @@ export class GenericSubscriptionConverterService {
     return '';
   }
 
-  private static buildClashYaml(nodes: ShadowsocksNode[]): string {
+  private static buildClashYaml(nodes: GenericNode[]): string {
     const lines: string[] = [
       'mixed-port: 7890',
       'allow-lan: false',
@@ -217,23 +396,111 @@ export class GenericSubscriptionConverterService {
     ];
 
     for (let index = 0; index < nodes.length; index++) {
-      const node: ShadowsocksNode = nodes[index];
+      const node: GenericNode = nodes[index];
       lines.push(`  - name: ${GenericSubscriptionConverterService.yamlString(node.name)}`);
-      lines.push('    type: ss');
-      lines.push(`    server: ${GenericSubscriptionConverterService.yamlString(node.server)}`);
-      lines.push(`    port: ${node.port}`);
-      lines.push(`    cipher: ${GenericSubscriptionConverterService.yamlString(node.cipher)}`);
-      lines.push(`    password: ${GenericSubscriptionConverterService.yamlString(node.password)}`);
-      lines.push('    udp: true');
-      if (node.plugin.length > 0) {
-        lines.push(`    plugin: ${GenericSubscriptionConverterService.yamlString(node.plugin)}`);
-        lines.push('    plugin-opts:');
-        if (node.pluginMode.length > 0) {
-          lines.push(`      mode: ${GenericSubscriptionConverterService.yamlString(node.pluginMode)}`);
+      if (node.type === 'ss') {
+        lines.push('    type: ss');
+        lines.push(`    server: ${GenericSubscriptionConverterService.yamlString(node.server)}`);
+        lines.push(`    port: ${node.port}`);
+        lines.push(`    cipher: ${GenericSubscriptionConverterService.yamlString(node.cipher || '')}`);
+        lines.push(`    password: ${GenericSubscriptionConverterService.yamlString(node.password || '')}`);
+        lines.push('    udp: true');
+        if (node.plugin && node.plugin.length > 0) {
+          lines.push(`    plugin: ${GenericSubscriptionConverterService.yamlString(node.plugin)}`);
+          lines.push('    plugin-opts:');
+          if (node.pluginMode && node.pluginMode.length > 0) {
+            lines.push(`      mode: ${GenericSubscriptionConverterService.yamlString(node.pluginMode)}`);
+          }
+          if (node.pluginHost && node.pluginHost.length > 0) {
+            lines.push(`      host: ${GenericSubscriptionConverterService.yamlString(node.pluginHost)}`);
+          }
         }
-        if (node.pluginHost.length > 0) {
-          lines.push(`      host: ${GenericSubscriptionConverterService.yamlString(node.pluginHost)}`);
+      } else if (node.type === 'trojan') {
+        lines.push('    type: trojan');
+        lines.push(`    server: ${GenericSubscriptionConverterService.yamlString(node.server)}`);
+        lines.push(`    port: ${node.port}`);
+        lines.push(`    password: ${GenericSubscriptionConverterService.yamlString(node.password || '')}`);
+        if (node.sni && node.sni.length > 0) {
+          lines.push(`    sni: ${GenericSubscriptionConverterService.yamlString(node.sni)}`);
         }
+        if (node.skipCertVerify) {
+          lines.push('    skip-cert-verify: true');
+        }
+        lines.push('    udp: true');
+      } else if (node.type === 'hysteria2' || node.type === 'hy2') {
+        lines.push('    type: hysteria2');
+        lines.push(`    server: ${GenericSubscriptionConverterService.yamlString(node.server)}`);
+        lines.push(`    port: ${node.port}`);
+        lines.push(`    password: ${GenericSubscriptionConverterService.yamlString(node.password || '')}`);
+        if (node.sni && node.sni.length > 0) {
+          lines.push(`    sni: ${GenericSubscriptionConverterService.yamlString(node.sni)}`);
+        }
+        if (node.skipCertVerify) {
+          lines.push('    skip-cert-verify: true');
+        }
+        lines.push('    udp: true');
+      } else if (node.type === 'tuic') {
+        lines.push('    type: tuic');
+        lines.push(`    server: ${GenericSubscriptionConverterService.yamlString(node.server)}`);
+        lines.push(`    port: ${node.port}`);
+        if (node.uuid && node.uuid.length > 0) {
+          lines.push(`    uuid: ${GenericSubscriptionConverterService.yamlString(node.uuid)}`);
+        }
+        if (node.password && node.password.length > 0) {
+          lines.push(`    password: ${GenericSubscriptionConverterService.yamlString(node.password)}`);
+        }
+        if (node.sni && node.sni.length > 0) {
+          lines.push(`    sni: ${GenericSubscriptionConverterService.yamlString(node.sni)}`);
+        }
+        if (node.alpn && node.alpn.length > 0) {
+          lines.push(`    alpn: [${node.alpn}]`);
+        }
+        if (node.skipCertVerify) {
+          lines.push('    skip-cert-verify: true');
+        }
+        if (node.udpRelayMode && node.udpRelayMode.length > 0) {
+          lines.push(`    udp-relay-mode: ${GenericSubscriptionConverterService.yamlString(node.udpRelayMode)}`);
+        }
+        lines.push('    udp: true');
+      } else if (node.type === 'vless') {
+        lines.push('    type: vless');
+        lines.push(`    server: ${GenericSubscriptionConverterService.yamlString(node.server)}`);
+        lines.push(`    port: ${node.port}`);
+        lines.push(`    uuid: ${GenericSubscriptionConverterService.yamlString(node.uuid || '')}`);
+        lines.push('    udp: true');
+        lines.push('    tls: true');
+        if (node.sni && node.sni.length > 0) {
+          lines.push(`    servername: ${GenericSubscriptionConverterService.yamlString(node.sni)}`);
+        }
+        if (node.skipCertVerify) {
+          lines.push('    skip-cert-verify: true');
+        }
+        if (node.network === 'ws') {
+          lines.push('    network: ws');
+          lines.push('    ws-opts:');
+          if (node.wsPath && node.wsPath.length > 0) {
+            lines.push(`      path: ${GenericSubscriptionConverterService.yamlString(node.wsPath)}`);
+          }
+          if (node.wsHost && node.wsHost.length > 0) {
+            lines.push('      headers:');
+            lines.push(`        Host: ${GenericSubscriptionConverterService.yamlString(node.wsHost)}`);
+          }
+        }
+      } else if (node.type === 'anytls') {
+        lines.push('    type: anytls');
+        lines.push(`    server: ${GenericSubscriptionConverterService.yamlString(node.server)}`);
+        lines.push(`    port: ${node.port}`);
+        lines.push(`    password: ${GenericSubscriptionConverterService.yamlString(node.password || '')}`);
+        if (node.clientFingerprint && node.clientFingerprint.length > 0) {
+          lines.push(`    client-fingerprint: ${GenericSubscriptionConverterService.yamlString(node.clientFingerprint)}`);
+        }
+        if (node.sni && node.sni.length > 0) {
+          lines.push(`    sni: ${GenericSubscriptionConverterService.yamlString(node.sni)}`);
+        }
+        if (node.skipCertVerify) {
+          lines.push('    skip-cert-verify: true');
+        }
+        lines.push('    udp: true');
       }
     }
 

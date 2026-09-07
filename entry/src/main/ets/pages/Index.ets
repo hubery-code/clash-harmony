@@ -154,6 +154,7 @@ struct Index {
   @State private pendingProxyGroup: string = '';
   @State private pendingProxyName: string = '';
   @State private isSpeedTesting: boolean = false;
+  @State private proxySortByDelay: boolean = false;
   @State private speedTestProgress: string = '';
   @State private speedTestSummary: string = '';
   @State private diagSegment: string = '连接';
@@ -1063,19 +1064,59 @@ struct Index {
 
   private getVisibleProxyNodes(): ProxyNode[] {
     const query: string = this.proxySearchText.trim().toLowerCase();
-    if (query.length === 0) {
-      return this.proxyNodes;
-    }
-
-    const result: ProxyNode[] = [];
+    let result: ProxyNode[] = [];
     for (let index = 0; index < this.proxyNodes.length; index++) {
       const node: ProxyNode = this.proxyNodes[index];
+      if (query.length === 0) {
+        result.push(node);
+        continue;
+      }
       const haystack: string = `${node.name} ${node.meta}`.toLowerCase();
       if (haystack.indexOf(query) >= 0) {
         result.push(node);
       }
     }
+
+    if (this.proxySortByDelay) {
+      result = result.slice().sort((a: ProxyNode, b: ProxyNode): number => {
+        return this.compareProxyNodeDelay(a, b);
+      });
+    }
+
     return result;
+  }
+
+  private compareProxyNodeDelay(a: ProxyNode, b: ProxyNode): number {
+    const delayA: number = this.extractDelayNumber(a.delay);
+    const delayB: number = this.extractDelayNumber(b.delay);
+    const hasA: boolean = delayA > 0;
+    const hasB: boolean = delayB > 0;
+    if (hasA && hasB) {
+      return delayA - delayB;
+    }
+    if (hasA && !hasB) {
+      return -1;
+    }
+    if (!hasA && hasB) {
+      return 1;
+    }
+    const isTimeoutA: boolean = a.delay === 'timeout';
+    const isTimeoutB: boolean = b.delay === 'timeout';
+    if (isTimeoutA && !isTimeoutB) {
+      return 1;
+    }
+    if (!isTimeoutA && isTimeoutB) {
+      return -1;
+    }
+    return 0;
+  }
+
+  private extractDelayNumber(delayStr: string): number {
+    if (!delayStr || delayStr.indexOf('timeout') >= 0 || delayStr === '--') {
+      return -1;
+    }
+    const val: number = Number.parseInt(delayStr.replace(/[^0-9]/g, ''));
+    return Number.isNaN(val) ? -1 : val;
   }
 
   private getVisibleProxyNodeIndexes(): number[] {
@@ -1957,12 +1998,18 @@ struct Index {
           .onChange((value: string) => { this.proxySearchText = value })
 
         if (this.proxyGroups.length > 0) {
-          Row({ space: 8 }) {
-            ForEach(this.proxyGroups, (group: ProxyGroupInfo) => {
-              Column() { this.GroupButton(group.name, this.selectedProxyGroup === group.name) }
-                .onClick(() => { this.selectProxyGroup(group.name) })
-            }, (group: ProxyGroupInfo) => group.name)
+          Scroll() {
+            Row({ space: 8 }) {
+              ForEach(this.proxyGroups, (group: ProxyGroupInfo) => {
+                Column() { this.GroupButton(group.name, this.selectedProxyGroup === group.name) }
+                  .onClick(() => { this.selectProxyGroup(group.name) })
+              }, (group: ProxyGroupInfo) => group.name)
+            }
+            .padding({ left: 1, right: 1 })
           }
+          .scrollable(ScrollDirection.Horizontal)
+          .scrollBar(BarState.Off)
+          .width('100%')
         } else {
           Row({ space: 8 }) {
             this.GroupButton('本地预览', true)
@@ -1974,10 +2021,15 @@ struct Index {
           Row() {
             Text(`节点列表 · ${this.getVisibleProxyNodes().length}/${this.proxyNodes.length}`).fontSize(15).fontWeight(FontWeight.Bold)
             Row({ space: 6 }) {
-              Text('同步').height(30).width(58).fontSize(12).textAlign(TextAlign.Center)
+              Text(this.proxySortByDelay ? '延迟排序' : '默认排序').height(30).fontSize(12).textAlign(TextAlign.Center)
+                .fontColor(this.proxySortByDelay ? '#0F766E' : '#64748B')
+                .backgroundColor(this.proxySortByDelay ? '#CCFBF1' : '#F1F5F9')
+                .borderRadius(8).padding({ left: 8, right: 8 })
+                .onClick(() => { this.proxySortByDelay = !this.proxySortByDelay })
+              Text('同步').height(30).width(52).fontSize(12).textAlign(TextAlign.Center)
                 .fontColor('#2563EB').backgroundColor('#EFF6FF').borderRadius(8)
                 .onClick(() => { this.refreshControllerProxies() })
-              Text(this.isSpeedTesting ? '测速中' : '测速').height(30).width(72).fontSize(12).textAlign(TextAlign.Center)
+              Text(this.isSpeedTesting ? '测速中' : '测速').height(30).width(64).fontSize(12).textAlign(TextAlign.Center)
                 .fontColor('#FFFFFF').backgroundColor(this.isSpeedTesting ? '#64748B' : '#2563EB').borderRadius(8)
                 .onClick(async () => { await this.runRealSpeedTest() })
             }

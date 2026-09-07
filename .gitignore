@@ -13,3 +13,5 @@ local.properties
 *.har
 *.log
 .DS_Store
+.appanalyzer/
+.codegenie/
