@@ -15,13 +15,6 @@ export function createDefaultFilterConfig(): ProxyFilterConfig {
   };
 }
 
-export interface FilterableNode {
-  name: string;
-  meta?: string;
-  delay?: string;
-  status?: string;
-}
-
 const STORE_NAME: string = 'clash_harmony_preferences';
 const KEY_FILTER_CONFIG: string = 'proxy_filter_config';
 
@@ -73,9 +66,9 @@ export class ProxyFilterService {
     }
   }
 
-  static shouldExclude(node: FilterableNode, config: ProxyFilterConfig): boolean {
+  static shouldExclude(name: string, meta: string, delay: string, status: string, config: ProxyFilterConfig): boolean {
     if (config.hideTimeout) {
-      if (node.delay === 'timeout' || node.status === 'dead') {
+      if (delay === 'timeout' || status === 'dead') {
         return true;
       }
     }
@@ -85,7 +78,7 @@ export class ProxyFilterService {
       return false;
     }
 
-    const target: string = `${node.name} ${node.meta ? node.meta : ''}`.toLowerCase();
+    const target: string = `${name} ${meta}`.toLowerCase();
     for (let i = 0; i < allKeywords.length; i++) {
       const kw: string = allKeywords[i];
       if (kw.length > 0 && target.indexOf(kw) >= 0) {

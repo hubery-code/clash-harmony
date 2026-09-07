@@ -1077,7 +1077,7 @@ struct Index {
     let result: ProxyNode[] = [];
     for (let index = 0; index < this.proxyNodes.length; index++) {
       const node: ProxyNode = this.proxyNodes[index];
-      if (ProxyFilterService.shouldExclude(node, this.proxyFilterConfig)) {
+      if (ProxyFilterService.shouldExclude(node.name, node.meta, node.delay, node.status ? node.status : '', this.proxyFilterConfig)) {
         continue;
       }
       if (query.length === 0) {
@@ -1200,7 +1200,7 @@ struct Index {
     const indexes: number[] = [];
     for (let index = 0; index < this.proxyNodes.length; index++) {
       const node: ProxyNode = this.proxyNodes[index];
-      if (ProxyFilterService.shouldExclude(node, this.proxyFilterConfig)) {
+      if (ProxyFilterService.shouldExclude(node.name, node.meta, node.delay, node.status ? node.status : '', this.proxyFilterConfig)) {
         continue;
       }
       if (query.length === 0) {
