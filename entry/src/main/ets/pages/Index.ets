@@ -1102,11 +1102,14 @@ struct Index {
   private getProxyNodeListTitle(): string {
     const visibleCount: number = this.getVisibleProxyNodes().length;
     const totalCount: number = this.proxyNodes.length;
-    const filteredCount: number = totalCount - visibleCount;
-    if (filteredCount > 0 && this.proxySearchText.trim().length === 0) {
-      return `节点列表 · ${visibleCount}/${totalCount} (已过滤 ${filteredCount})`;
-    }
     return `节点列表 · ${visibleCount}/${totalCount}`;
+  }
+
+  private getProxyFilteredCount(): number {
+    const visibleCount: number = this.getVisibleProxyNodes().length;
+    const totalCount: number = this.proxyNodes.length;
+    const filteredCount: number = totalCount - visibleCount;
+    return filteredCount > 0 ? filteredCount : 0;
   }
 
   private getFilterButtonLabel(): string {
@@ -2122,22 +2125,54 @@ struct Index {
 
         Column({ space: 8 }) {
           Row() {
-            Text(this.getProxyNodeListTitle()).fontSize(15).fontWeight(FontWeight.Bold)
-            Row({ space: 6 }) {
-              Text(this.proxySortByDelay ? '延迟排序' : '默认排序').height(30).fontSize(12).textAlign(TextAlign.Center)
+            Column({ space: 2 }) {
+              Text(this.getProxyNodeListTitle()).fontSize(15).fontWeight(FontWeight.Bold).fontColor('#0F172A')
+              if (this.getProxyFilteredCount() > 0 && this.proxySearchText.trim().length === 0) {
+                Text(`已过滤 ${this.getProxyFilteredCount()} 个节点`)
+                  .fontSize(11)
+                  .fontColor('#2563EB')
+                  .onClick(() => {
+                    this.showProxyFilterPanel = true;
+                  })
+              }
+            }
+            .alignItems(HorizontalAlign.Start)
+            .layoutWeight(1)
+
+            Row({ space: 4 }) {
+              Text(this.proxySortByDelay ? '延迟排序' : '默认排序')
+                .height(28)
+                .fontSize(12)
+                .textAlign(TextAlign.Center)
                 .fontColor(this.proxySortByDelay ? '#0F766E' : '#64748B')
                 .backgroundColor(this.proxySortByDelay ? '#CCFBF1' : '#F1F5F9')
-                .borderRadius(8).padding({ left: 8, right: 8 })
+                .borderRadius(6)
+                .padding({ left: 6, right: 6 })
                 .onClick(() => { this.proxySortByDelay = !this.proxySortByDelay })
-              Text('同步').height(30).width(52).fontSize(12).textAlign(TextAlign.Center)
-                .fontColor('#2563EB').backgroundColor('#EFF6FF').borderRadius(8)
+
+              Text('同步')
+                .height(28)
+                .padding({ left: 8, right: 8 })
+                .fontSize(12)
+                .textAlign(TextAlign.Center)
+                .fontColor('#2563EB')
+                .backgroundColor('#EFF6FF')
+                .borderRadius(6)
                 .onClick(() => { this.refreshControllerProxies() })
-              Text(this.isSpeedTesting ? '测速中' : '测速').height(30).width(64).fontSize(12).textAlign(TextAlign.Center)
-                .fontColor('#FFFFFF').backgroundColor(this.isSpeedTesting ? '#64748B' : '#2563EB').borderRadius(8)
+
+              Text(this.isSpeedTesting ? '测速中' : '测速')
+                .height(28)
+                .padding({ left: 10, right: 10 })
+                .fontSize(12)
+                .textAlign(TextAlign.Center)
+                .fontColor('#FFFFFF')
+                .backgroundColor(this.isSpeedTesting ? '#64748B' : '#2563EB')
+                .borderRadius(6)
                 .onClick(async () => { await this.runRealSpeedTest() })
             }
           }
-          .width('100%').justifyContent(FlexAlign.SpaceBetween)
+          .width('100%')
+          .alignItems(VerticalAlign.Center)
           if (this.speedTestProgress.length > 0) {
             Text(this.speedTestProgress).fontSize(12).fontColor(this.isSpeedTesting ? '#2563EB' : '#475569')
               .width('100%').padding({ top: 6, bottom: 6, left: 8, right: 8 })
