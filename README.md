@@ -4,8 +4,8 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 
 ## 当前状态
 
-更新时间：2026-09-07
-版本：v0.2.0 (versionCode 1000100)
+更新时间：2026-09-11
+版本：v0.2.1 (versionCode 1000101)
 
 - 真机包名：`io.github.clashharmony.app`
 - 主入口：`EntryAbility`
@@ -14,12 +14,23 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 - 已打包 `arm64-v8a/libmihomo_exec.so` 作为 mihomo 执行 fallback
 - `x86_64` 仍使用内置 fake/stub adapter，主要用于模拟器界面与构建验证
 - 真机验证过 VPN 可建立，controller 端口、TUN 网卡和代理访问链路可用
+- VPN 连接后进入后台会申请数据传输长时任务，降低独立 VPN 进程被系统回收导致断连的概率
 - 首页状态刷新已修复：连接状态、运行时长、下载/上传速度、连接数、当前链路会直接绑定 live 状态刷新
 - 待机能耗彻底优化：TUN 转发线程采用事件等待休眠，待机 CPU < 0.5%，杜绝发热耗电
 - 当前未上架鸿蒙应用市场，仅通过 HAP 包研究、调试和验证
 - 开源许可：`GPL-3.0-only`，详见 [LICENSE](LICENSE) 和 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
-## 最近更新 (v0.2.0 - 2026-09-07)
+## 变更记录
+
+### v0.2.1 - 2026-09-11
+
+- **修复 VPN 切后台后自动断开**：
+  - 为 `EntryAbility` 声明 `dataTransfer` 后台模式，并申请 `ohos.permission.KEEP_BACKGROUND_RUNNING` 权限。
+  - VPN 连接期间，应用进入后台时启动数据传输长时任务；断开 VPN 时同步释放长时任务。
+  - 增加并发启动与连接失败清理，避免重复申请或 VPN 启动失败后遗留后台任务。
+  - 已在 HarmonyOS 真机覆盖安装验证：应用进入后台后，主进程、独立 VPN 进程和 mihomo controller 监听端口持续存活。
+
+### v0.2.0 - 2026-09-07
 
 - **代理页智能过滤与体验升级**：
   - 支持自定义排除关键词（支持逗号、分号、空格分隔多关键词，如 `香港`、`0.3x` 等）。
@@ -96,6 +107,7 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 - `MihomoControllerService.ets`：mihomo REST controller 封装
 - `TrafficPollerService.ets`：实时流量轮询
 - `VpnService.ets`：VPN Extension 启停入口
+- `VpnBackgroundTaskService.ets`：VPN 连接期间的数据传输长时任务管理
 - `TcpDelayTestService.ets`：节点 TCP 延迟测试
 
 ### Native 层

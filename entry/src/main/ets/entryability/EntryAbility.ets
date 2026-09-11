@@ -1,12 +1,14 @@
 import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { VpnBackgroundTaskService } from '../services/VpnBackgroundTaskService';
 
 const DOMAIN: number = 0x0001;
 const TAG: string = 'ClashHarmony';
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    VpnBackgroundTaskService.initialize(this.context);
     hilog.info(DOMAIN, TAG, 'EntryAbility created');
   }
 
@@ -34,6 +36,6 @@ export default class EntryAbility extends UIAbility {
 
   onBackground(): void {
     hilog.info(DOMAIN, TAG, 'EntryAbility background');
+    VpnBackgroundTaskService.startIfVpnRunning();
   }
 }
-

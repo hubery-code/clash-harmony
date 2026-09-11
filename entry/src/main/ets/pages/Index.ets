@@ -93,8 +93,8 @@ const NAV_ITEMS: NavItem[] = [
 ];
 const LOG_DOMAIN: number = 0x0001;
 const LOG_TAG: string = 'ClashHarmonyIndex';
-const APP_VERSION_NAME: string = 'v0.2.0';
-const APP_BUILD_UPDATED_AT: string = '2026-09-07 17:18';
+const APP_VERSION_NAME: string = 'v0.2.1';
+const APP_BUILD_UPDATED_AT: string = '2026-09-11 09:46';
 const DELAY_TEST_TIMEOUT_MS: number = 4500;
 const DELAY_TEST_URLS: string[] = [
   'https://cp.cloudflare.com/generate_204',

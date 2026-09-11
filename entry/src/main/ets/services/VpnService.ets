@@ -1,6 +1,7 @@
 import { Want } from '@kit.AbilityKit';
 import { vpnExtension } from '@kit.NetworkKit';
 import nativeCore from 'libentry.so';
+import { VpnBackgroundTaskService } from './VpnBackgroundTaskService';
 
 const BUNDLE_NAME: string = 'io.github.clashharmony.app';
 const VPN_ABILITY_NAME: string = 'ClashVpnExtensionAbility';
@@ -19,21 +20,25 @@ function createVpnWant(configPath?: string): Want {
 
 export class VpnService {
   static async start(configPath: string): Promise<boolean> {
+    await VpnBackgroundTaskService.setVpnRunning(true);
     try {
       const result = await Promise.race([
         vpnExtension.startVpnExtensionAbility(createVpnWant(configPath)),
         VpnService.timeout(5000)
       ]);
       if (result === 'timeout') {
+        await VpnBackgroundTaskService.setVpnRunning(false);
         return false;
       }
       return true;
     } catch (err) {
+      await VpnBackgroundTaskService.setVpnRunning(false);
       return false;
     }
   }
 
   static async stop(): Promise<boolean> {
+    await VpnBackgroundTaskService.setVpnRunning(false);
     try {
       const result = await Promise.race([
         vpnExtension.stopVpnExtensionAbility(createVpnWant()),

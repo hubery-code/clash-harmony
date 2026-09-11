@@ -1,7 +1,7 @@
 {
   "modelVersion": "5.0.0",
   "name": "clash_harmony",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "HarmonyOS client prototype for Clash/mihomo.",
   "main": "",
   "author": "Clash Harmony Contributors",

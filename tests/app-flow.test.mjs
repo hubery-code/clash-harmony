@@ -8,6 +8,8 @@ const subscriptionSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/s
 const converterSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/GenericSubscriptionConverterService.ets'), 'utf8');
 const vpnExtensionSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/vpnextensionability/ClashVpnExtensionAbility.ets'), 'utf8');
 const vpnServiceSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/VpnService.ets'), 'utf8');
+const vpnBackgroundTaskSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/VpnBackgroundTaskService.ets'), 'utf8');
+const entryAbilitySource = fs.readFileSync(path.join(root, 'entry/src/main/ets/entryability/EntryAbility.ets'), 'utf8');
 const coreBridgeSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/CoreBridgeService.ets'), 'utf8');
 const localFileImportSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/LocalFileImportService.ets'), 'utf8');
 const mihomoControllerSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/MihomoControllerService.ets'), 'utf8');
@@ -34,6 +36,17 @@ const trafficPollerSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/
 const tunForwarderSource = fs.readFileSync(path.join(root, 'entry/src/main/cpp/tun_forwarder.cpp'), 'utf8');
 const proxyFilterSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/ProxyFilterService.ets'), 'utf8');
 const qrCodeScanServiceSource = fs.readFileSync(path.join(root, 'entry/src/main/ets/services/QrCodeScanImportService.ets'), 'utf8');
+
+// VPN background survival assertions
+assert.match(moduleSource, /"backgroundModes"\s*:\s*\[\s*"dataTransfer"\s*\]/);
+assert.match(moduleSource, /"name"\s*:\s*"ohos\.permission\.KEEP_BACKGROUND_RUNNING"/);
+assert.match(entryAbilitySource, /VpnBackgroundTaskService\.initialize\(this\.context\)/);
+assert.match(entryAbilitySource, /onBackground\(\): void \{[\s\S]*?VpnBackgroundTaskService\.startIfVpnRunning\(\)/);
+assert.match(vpnBackgroundTaskSource, /backgroundTaskManager\.BackgroundMode\.DATA_TRANSFER/);
+assert.match(vpnBackgroundTaskSource, /backgroundTaskManager\.startBackgroundRunning\(/);
+assert.match(vpnBackgroundTaskSource, /backgroundTaskManager\.stopBackgroundRunning\(context\)/);
+assert.match(vpnServiceSource, /VpnBackgroundTaskService\.setVpnRunning\(true\)/);
+assert.match(vpnServiceSource, /VpnBackgroundTaskService\.setVpnRunning\(false\)/);
 
 // Index.ets shell assertions (orchestration logic still in Index)
 assert.match(indexSource, /private async prepareRuntimeForConnection/);
@@ -67,8 +80,8 @@ assert.match(indexSource, /已连接 · \$\{version\} · \$\{connections\.length
 assert.match(indexSource, /Text\(this\.modeLabel\(this\.proxyMode\)\)/);
 assert.match(indexSource, /Text\(this\.liveProfileName\)/);
 assert.match(indexSource, /Text\(this\.liveProxyName\)/);
-assert.match(indexSource, /APP_VERSION_NAME: string = 'v0\.2\.0'/);
-assert.match(indexSource, /APP_BUILD_UPDATED_AT: string = '2026-09-07 17:18'/);
+assert.match(indexSource, /APP_VERSION_NAME: string = 'v0\.2\.1'/);
+assert.match(indexSource, /APP_BUILD_UPDATED_AT: string = '2026-09-11 09:46'/);
 assert.match(indexSource, /DELAY_TEST_TIMEOUT_MS: number = 4500/);
 assert.match(indexSource, /https:\/\/cp\.cloudflare\.com\/generate_204/);
 assert.match(indexSource, /http:\/\/connectivitycheck\.platform\.hicloud\.com\/generate_204/);
