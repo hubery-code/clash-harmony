@@ -47,6 +47,17 @@ assert.match(vpnBackgroundTaskSource, /backgroundTaskManager\.startBackgroundRun
 assert.match(vpnBackgroundTaskSource, /backgroundTaskManager\.stopBackgroundRunning\(context\)/);
 assert.match(vpnServiceSource, /VpnBackgroundTaskService\.setVpnRunning\(true\)/);
 assert.match(vpnServiceSource, /VpnBackgroundTaskService\.setVpnRunning\(false\)/);
+assert.match(vpnServiceSource, /await VpnBackgroundTaskService\.startIfVpnRunning\(\)/);
+assert.ok(
+  vpnServiceSource.indexOf('vpnExtension.startVpnExtensionAbility') <
+    vpnServiceSource.indexOf('await VpnBackgroundTaskService.startIfVpnRunning()'),
+  'VPN background task should be registered after the VPN extension process exists'
+);
+assert.match(vpnServiceSource, /WATCHDOG_INTERVAL_MS:\s*number\s*=\s*2000/);
+assert.match(vpnServiceSource, /MihomoControllerService\.checkVersion\(\)/);
+assert.match(vpnServiceSource, /VPN extension unavailable; requesting automatic restart/);
+assert.match(vpnServiceSource, /VpnService\.startWatchdog\(\)/);
+assert.match(vpnServiceSource, /VpnService\.stopWatchdog\(\)/);
 
 // Index.ets shell assertions (orchestration logic still in Index)
 assert.match(indexSource, /private async prepareRuntimeForConnection/);

@@ -26,6 +26,14 @@ export class VpnBackgroundTaskService {
   }
 
   static async startIfVpnRunning(): Promise<boolean> {
+    hilog.info(
+      DOMAIN,
+      TAG,
+      'Checking VPN background task, vpnRunning=%{public}s started=%{public}s starting=%{public}s',
+      VpnBackgroundTaskService.vpnRunning ? 'true' : 'false',
+      VpnBackgroundTaskService.started ? 'true' : 'false',
+      VpnBackgroundTaskService.starting ? 'true' : 'false'
+    );
     if (!VpnBackgroundTaskService.vpnRunning) {
       return false;
     }
@@ -51,7 +59,9 @@ export class VpnBackgroundTaskService {
         requestCode: 0,
         wantAgentFlags: [wantAgent.WantAgentFlags.UPDATE_PRESENT_FLAG]
       };
+      hilog.info(DOMAIN, TAG, 'Creating notification WantAgent for VPN background task');
       const notificationWantAgent: WantAgent = await wantAgent.getWantAgent(info);
+      hilog.info(DOMAIN, TAG, 'Requesting VPN data-transfer background task');
       await backgroundTaskManager.startBackgroundRunning(
         context,
         backgroundTaskManager.BackgroundMode.DATA_TRANSFER,

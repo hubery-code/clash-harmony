@@ -14,7 +14,7 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 - 已打包 `arm64-v8a/libmihomo_exec.so` 作为 mihomo 执行 fallback
 - `x86_64` 仍使用内置 fake/stub adapter，主要用于模拟器界面与构建验证
 - 真机验证过 VPN 可建立，controller 端口、TUN 网卡和代理访问链路可用
-- VPN 连接后进入后台会申请数据传输长时任务，降低独立 VPN 进程被系统回收导致断连的概率
+- VPN 扩展创建后会申请数据传输长时任务，并由主进程看门狗在扩展被系统回收时自动恢复
 - 首页状态刷新已修复：连接状态、运行时长、下载/上传速度、连接数、当前链路会直接绑定 live 状态刷新
 - 待机能耗彻底优化：TUN 转发线程采用事件等待休眠，待机 CPU < 0.5%，杜绝发热耗电
 - 当前未上架鸿蒙应用市场，仅通过 HAP 包研究、调试和验证
@@ -26,9 +26,10 @@ Clash Harmony 是一个 HarmonyOS / ArkTS Stage 工程，用于在鸿蒙设备�
 
 - **修复 VPN 切后台后自动断开**：
   - 为 `EntryAbility` 声明 `dataTransfer` 后台模式，并申请 `ohos.permission.KEEP_BACKGROUND_RUNNING` 权限。
-  - VPN 连接期间，应用进入后台时启动数据传输长时任务；断开 VPN 时同步释放长时任务。
+  - VPN 扩展创建后立即在前台注册数据传输长时任务，进入后台时再次兜底检查；断开 VPN 时同步释放长时任务。
+  - 增加后台 VPN 看门狗：连续检测到 mihomo controller 失联时，自动重新拉起 VPN 扩展，避免系统回收后一直处于断开状态。
   - 增加并发启动与连接失败清理，避免重复申请或 VPN 启动失败后遗留后台任务。
-  - 已在 HarmonyOS 真机覆盖安装验证：应用进入后台后，主进程、独立 VPN 进程和 mihomo controller 监听端口持续存活。
+  - 已在 HarmonyOS 真机覆盖安装并验证 VPN、controller、长时任务和后台看门狗均可启动；后台长时稳定性继续通过进程与端口监控回归。
 
 ### v0.2.0 - 2026-09-07
 
